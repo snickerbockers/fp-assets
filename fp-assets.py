@@ -47,6 +47,10 @@ except GetoptError:
     print usage_string
     exit(1)
 
+if os.path.exists(assets_dir_path):
+    print "Error: \"%s\" already exists" % assets_dir_path
+    exit(1)
+
 assets_file = open(assets_file_path, "rb")
 
 img_offsets = []
