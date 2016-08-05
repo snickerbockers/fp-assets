@@ -14,6 +14,10 @@ The out-dir will contain a hierarchy of all files in Assets.dat this script coul
 Do not rename these files because that will confuse it when it tries to create a new Assets.dat from this data.
 The audio/ and images/ subdirectories contain several text files ending in "_meta.txt".  These contain metadata of unknown purpose.  It might be some sort of key used by Chowdren to identify individual assets or it might be something else entirely.
 
+## Prerequisites
+* Python 2.7
+* PIL (Python Imaging Library)
+* zlib
 
 ## Missing features
 * This program can't create a new Assets.dat yet
