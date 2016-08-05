@@ -38,10 +38,10 @@ This script will exit with an error if out_dir already exists.
 
 try:
     for option, value in \
-        getopt(sys.argv[1:], "f:d:", ["in-file=", "out-file="])[0]:
+        getopt(sys.argv[1:], "f:d:", ["in-file=", "out-dir="])[0]:
         if option == "-f" or option == "--in-file":
             assets_file_path = value
-        elif option == "-d" or option == "--out-file":
+        elif option == "-d" or option == "--out-dir":
             assets_dir_path = value
 except GetoptError:
     print usage_string
