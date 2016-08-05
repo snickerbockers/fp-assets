@@ -14,7 +14,7 @@ import os
 import zlib
 import sys
 from PIL import Image
-from getopt import getopt
+from getopt import getopt, GetoptError
 
 OFFSETS_START=0x83fa
 IMG_COUNT=16893
@@ -26,11 +26,26 @@ FILE_COUNT=18
 assets_file_path="Assets.dat"
 assets_dir_path="Assets"
 
-for option, value in getopt(sys.argv[1:], "f:d:")[0]:
-    if op == "f":
-        assets_file_path = value
-    elif op == "d":
-        assets_dir_path = value
+usage_string = """\
+Usage: %s [ -f|--in-file=<in-file> ] [ -d|--out-dir=<out-dir> ]
+
+in_file is a path to your Assets.dat file.  it defaults to ./Assets.dat
+out_dir is a path to where you want the Assets to go.  It defaults to ./Assets
+
+This script will exit with an error if out_dir already exists.
+""" % sys.argv[0]
+
+
+try:
+    for option, value in \
+        getopt(sys.argv[1:], "f:d:", ["in-file=", "out-file="])[0]:
+        if option == "-f" or option == "--in-file":
+            assets_file_path = value
+        elif option == "-d" or option == "--out-file":
+            assets_dir_path = value
+except GetoptError:
+    print usage_string
+    exit(1)
 
 assets_file = open(assets_file_path, "rb")
 
