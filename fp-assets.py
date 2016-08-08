@@ -13,6 +13,7 @@ import struct
 import os
 import zlib
 import sys
+import json
 from PIL import Image
 from getopt import getopt, GetoptError
 
@@ -35,6 +36,57 @@ out_dir is a path to where you want the Assets to go.  It defaults to ./Assets
 This script will exit with an error if out_dir already exists.
 """ % sys.argv[0]
 
+def read_glyph(glyph_no):
+    """
+    reads in a glyph from assets_file and saves the metrics
+    to a json and the glyph itself to a png.
+    """
+    metrics = { }
+    metrics['charcode'], = struct.unpack("<I", assets_file.read(4))
+    metrics['x1'], = struct.unpack("<f", assets_file.read(4))
+    metrics['y1'], = struct.unpack("<f", assets_file.read(4))
+    metrics['x2'], = struct.unpack("<f", assets_file.read(4))
+    metrics['y2'], = struct.unpack("<f", assets_file.read(4))
+    metrics['advance_x'], = struct.unpack("<f", assets_file.read(4))
+    metrics['advance_y'], = struct.unpack("<f", assets_file.read(4))
+    metrics['corner_x'], = struct.unpack("<f", assets_file.read(4))
+    metrics['corner_y'], = struct.unpack("<f", assets_file.read(4))
+    metrics['width'], = struct.unpack("<I", assets_file.read(4))
+    metrics['height'], = struct.unpack("<I", assets_file.read(4))
+
+    metrics_path = os.path.join(font_dir, "glyph_%d_metrics.json" % glyph_no)
+    metrics_file = open(metrics_path, "w")
+    metrics_file.write(json.dumps(metrics))
+
+    w = metrics['width']
+    h = metrics['height']
+
+    if w > 0 and h > 0:
+        raw_img = assets_file.read(w * h)
+        out_img = Image.frombytes("L", (w, h), raw_img)
+        out_img.save(os.path.join(font_dir, "glyph_%d.png" % glyph_no))
+
+def read_font(font_no):
+    """
+    reads a font in from assets_file, saves the metrics to a json,
+    and then calls read_glyph for each glyph in the font.
+    """
+    font_dir = os.path.join(assets_dir_path, "fonts",
+                            "font_%d" % font_no)
+    os.mkdir(font_dir, 0755)
+    font_metrics = {}
+    font_metrics['size'], = struct.unpack("<H", assets_file.read(2))
+    font_metrics['flags'], = struct.unpack("<H", assets_file.read(2))
+    font_metrics['width'],  = struct.unpack("<f", assets_file.read(4))
+    font_metrics['height'], = struct.unpack("<f", assets_file.read(4))
+    font_metrics['ascent'], = struct.unpack("<f", assets_file.read(4))
+    font_metrics['descent'], = struct.unpack("<f", assets_file.read(4))
+    font_metrics['glyph_count'], = struct.unpack("<I", assets_file.read(4))
+
+    metrics_file = open(os.path.join(font_dir, "font_metrics.json"), "w")
+    metrics_file.write(json.dumps(font_metrics))
+    for glyph_no in range(font_metrics['glyph_count']):
+        read_glyph(glyph_no)
 
 try:
     for option, value in \
@@ -67,6 +119,7 @@ os.mkdir(os.path.join(assets_dir_path, "images"), 0755)
 os.mkdir(os.path.join(assets_dir_path, "audio"), 0755)
 os.mkdir(os.path.join(assets_dir_path, "shaders"), 0755)
 os.mkdir(os.path.join(assets_dir_path, "files"), 0755)
+os.mkdir(os.path.join(assets_dir_path, "fonts"), 0755)
 
 # read in image offsets
 for i in range(IMG_COUNT):
@@ -141,6 +194,27 @@ for index, offset in enumerate(sound_offsets):
 for index, offset in enumerate(font_offsets):
     print "font offset is 0x%x" % offset
     assets_file.seek(offset)
+
+    n_fonts = struct.unpack("<I", assets_file.read(4))[0]
+
+    for font_no in range(n_fonts):
+        font_dir = os.path.join(assets_dir_path, "fonts",
+                                "font_%d" % font_no)
+        os.mkdir(font_dir, 0755)
+
+        font_metrics = {}
+        font_metrics['size'], = struct.unpack("<H", assets_file.read(2))
+        font_metrics['flags'], = struct.unpack("<H", assets_file.read(2))
+        font_metrics['width'],  = struct.unpack("<f", assets_file.read(4))
+        font_metrics['height'], = struct.unpack("<f", assets_file.read(4))
+        font_metrics['ascent'], = struct.unpack("<f", assets_file.read(4))
+        font_metrics['descent'], = struct.unpack("<f", assets_file.read(4))
+        font_metrics['glyph_count'], = struct.unpack("<I", assets_file.read(4))
+
+        metrics_file = open(os.path.join(font_dir, "font_metrics.json"), "w")
+        metrics_file.write(json.dumps(font_metrics))
+        for glyph_no in range(font_metrics['glyph_count']):
+            read_glyph(glyph_no)
 
 # next read in shaders.  These are just 4-byte lengths followed by text
 for index, offset in enumerate(shader_offsets):
