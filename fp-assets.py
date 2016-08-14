@@ -112,14 +112,18 @@ shader_offsets = []
 file_offsets = []
 type_sizes = []
 
-assets_file.seek(OFFSETS_START)
-
 os.mkdir(assets_dir_path, 0755)
 os.mkdir(os.path.join(assets_dir_path, "images"), 0755)
 os.mkdir(os.path.join(assets_dir_path, "audio"), 0755)
 os.mkdir(os.path.join(assets_dir_path, "shaders"), 0755)
 os.mkdir(os.path.join(assets_dir_path, "files"), 0755)
 os.mkdir(os.path.join(assets_dir_path, "fonts"), 0755)
+
+# read in the preload data.  I don't know what to do with this other than
+# to hold onto it.
+preload_data = assets_file.read(OFFSETS_START)
+preload_data_file = open(os.path.join(assets_dir_path, "preload_data.bin"), "w")
+preload_data_file.write(preload_data)
 
 # read in image offsets
 for i in range(IMG_COUNT):
