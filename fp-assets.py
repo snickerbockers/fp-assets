@@ -158,6 +158,8 @@ for i in range(FILE_COUNT):
 #     Truecolor RGBA quads compressed using the deflate/zlib format.
 #
 # These are all little-endian values.
+import pdb
+pdb.set_trace()
 for index, offset in enumerate(img_offsets):
     assets_file.seek(offset)
 
@@ -172,6 +174,7 @@ for index, offset in enumerate(img_offsets):
     for i in range(4):
         meta_txt.write("0x%x\n" % struct.unpack("<H", assets_file.read(2))[0])
 
+    print 'index %d' % index
     file_len = struct.unpack("<I", assets_file.read(4))[0]
     file_dat = zlib.decompress(assets_file.read(file_len))
 
@@ -195,6 +198,7 @@ for index, offset in enumerate(sound_offsets):
     out_file.write(file_dat)
 
 # next read in fonts
+pdb.set_trace()
 for index, offset in enumerate(font_offsets):
     print "font offset is 0x%x" % offset
     assets_file.seek(offset)

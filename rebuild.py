@@ -17,6 +17,7 @@ import re
 import json
 from PIL import Image
 from getopt import getopt, GetoptError
+import pdb
 
 OFFSETS_START=0x83fa
 IMG_COUNT=16893
@@ -88,8 +89,9 @@ assert assets_file.tell() == OFFSETS_START
 
 offset_block_size = 4 * (IMG_COUNT + SOUND_COUNT + FONT_COUNT \
                          + SHADER_COUNT + FILE_COUNT)
-assets_file.seek(OFFSETS_START + offset_block_size)
+assets_file.seek(OFFSETS_START + offset_block_size, os.SEEK_SET)
 
+pdb.set_trace()
 img_offsets = []
 for img_idx in range(IMG_COUNT):
     img_offsets.append(assets_file.tell())
@@ -133,7 +135,7 @@ for sound_idx in range(SOUND_COUNT):
     assets_file.write(sound_data)
 
 
-
+pdb.set_trace()
 font_offsets = []
 for font_idx in range(FONT_COUNT):
     font_offsets.append(assets_file.tell())
@@ -142,6 +144,8 @@ for font_idx in range(FONT_COUNT):
     for file_name in os.listdir(os.path.join(assets_dir_path, "fonts")):
         if re.match("font_\d", file_name):
             n_fonts += 1
+
+    assets_file.write(struct.pack("<I", n_fonts))
 
     for font_no in range(n_fonts):
         font_dir = os.path.join(assets_dir_path, "fonts", \
@@ -165,7 +169,6 @@ shader_offsets = []
 for shader_idx in range(SHADER_COUNT):
     shader_offsets.append(assets_file.tell())
 
-    shader_offsets.append(assets_file.tell())
     shader_file = open(os.path.join(assets_dir_path, "shaders", \
                                     "shader_%d.glsl" % shader_idx), "r")
     shader_txt = shader_file.read()
@@ -177,7 +180,6 @@ file_offsets = []
 for file_idx in range(FILE_COUNT):
     file_offsets.append(assets_file.tell())
 
-    file_offsets.append(assets_file.tell())
     file_file = open(os.path.join(assets_dir_path, "files", \
                                     "file_%d.txt" % file_idx), "r")
     file_txt = file_file.read()
@@ -186,7 +188,8 @@ for file_idx in range(FILE_COUNT):
     assets_file.write(file_txt)
 
 # now write the offsets block
-assets_file.seek(OFFSETS_START)
+pdb.set_trace()
+assets_file.seek(OFFSETS_START, os.SEEK_SET)
 for offset in (img_offsets + sound_offsets + font_offsets + \
                shader_offsets + file_offsets):
     assets_file.write(struct.pack("<I", offset))
