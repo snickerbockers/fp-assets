@@ -17,7 +17,6 @@ import re
 import json
 from PIL import Image
 from getopt import getopt, GetoptError
-import pdb
 
 OFFSETS_START=0x83fa
 IMG_COUNT=16893
@@ -91,7 +90,6 @@ offset_block_size = 4 * (IMG_COUNT + SOUND_COUNT + FONT_COUNT \
                          + SHADER_COUNT + FILE_COUNT)
 assets_file.seek(OFFSETS_START + offset_block_size, os.SEEK_SET)
 
-pdb.set_trace()
 img_offsets = []
 for img_idx in range(IMG_COUNT):
     img_offsets.append(assets_file.tell())
@@ -135,7 +133,6 @@ for sound_idx in range(SOUND_COUNT):
     assets_file.write(sound_data)
 
 
-pdb.set_trace()
 font_offsets = []
 for font_idx in range(FONT_COUNT):
     font_offsets.append(assets_file.tell())
@@ -188,7 +185,6 @@ for file_idx in range(FILE_COUNT):
     assets_file.write(file_txt)
 
 # now write the offsets block
-pdb.set_trace()
 assets_file.seek(OFFSETS_START, os.SEEK_SET)
 for offset in (img_offsets + sound_offsets + font_offsets + \
                shader_offsets + file_offsets):
