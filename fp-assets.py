@@ -23,6 +23,7 @@ SOUND_COUNT=475
 FONT_COUNT=1
 SHADER_COUNT=37
 FILE_COUNT=18
+TYPE_SIZE_COUNT = 5
 
 assets_file_path="Assets.dat"
 assets_dir_path="Assets"
@@ -149,6 +150,16 @@ for i in range(SHADER_COUNT):
 for i in range(FILE_COUNT):
     offset = struct.unpack("<I", assets_file.read(4))[0]
     file_offsets.append(offset)
+
+for i in range(TYPE_SIZE_COUNT):
+    ts = struct.unpack("<I", assets_file.read(4))[0]
+    type_sizes.append(ts)
+
+# write the type sizes
+type_size_file = open(os.path.join(assets_dir_path, "type_sizes.txt"), "w")
+for ts in type_sizes:
+    type_size_file.write("0x%x\n" % ts)
+
 
 # Format of images in Assets.dat:
 #     width (16 bits)

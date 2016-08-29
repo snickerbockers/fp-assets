@@ -24,6 +24,7 @@ SOUND_COUNT=475
 FONT_COUNT=1
 SHADER_COUNT=37
 FILE_COUNT=18
+TYPE_SIZE_COUNT = 5
 
 assets_file_path="Assets.dat"
 assets_dir_path="Assets"
@@ -87,7 +88,7 @@ assets_file.write(preload_data)
 assert assets_file.tell() == OFFSETS_START
 
 offset_block_size = 4 * (IMG_COUNT + SOUND_COUNT + FONT_COUNT \
-                         + SHADER_COUNT + FILE_COUNT)
+                         + SHADER_COUNT + FILE_COUNT + TYPE_SIZE_COUNT)
 assets_file.seek(OFFSETS_START + offset_block_size, os.SEEK_SET)
 
 img_offsets = []
@@ -184,8 +185,15 @@ for file_idx in range(FILE_COUNT):
     assets_file.write(file_len)
     assets_file.write(file_txt)
 
-# now write the offsets block
+# read in the type sizes
+type_sizes = []
+type_size_file = open(os.path.join(assets_dir_path, "type_sizes.txt"), "r")
+type_size_txt = type_size_file.read().splitlines()
+for i in range(TYPE_SIZE_COUNT):
+    ts = struct.pack("<I", int(type_size_txt[i], 0))
+
+# now write the offsets block and the type sizes
 assets_file.seek(OFFSETS_START, os.SEEK_SET)
 for offset in (img_offsets + sound_offsets + font_offsets + \
-               shader_offsets + file_offsets):
+               shader_offsets + file_offsets + type_sizes):
     assets_file.write(struct.pack("<I", offset))
