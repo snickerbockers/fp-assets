@@ -98,7 +98,7 @@ for img_idx in range(IMG_COUNT):
     img = Image.open(os.path.join(assets_dir_path, "images",
                                   "img_%d.png" % img_idx), "r")
     img_w, img_h = img.size
-    data = zlib.compress(img.tobytes())
+    data = zlib.compress(img.tobytes(), 9)
     img_meta_file = open(os.path.join(assets_dir_path, "images",
                                       "img_%d_meta.txt" % img_idx), "r")
     img_meta_txt = img_meta_file.read().splitlines()
