@@ -168,7 +168,14 @@ for shader_idx in range(SHADER_COUNT):
     shader_offsets.append(assets_file.tell())
 
     shader_file = open(os.path.join(assets_dir_path, "shaders", \
-                                    "shader_%d.glsl" % shader_idx), "r")
+                                    "shader_%d_vert.glsl" % shader_idx), "r")
+    shader_txt = shader_file.read()
+    shader_len = struct.pack("<I", len(shader_txt))
+    assets_file.write(shader_len)
+    assets_file.write(shader_txt)
+
+    shader_file = open(os.path.join(assets_dir_path, "shaders", \
+                                    "shader_%d_frag.glsl" % shader_idx), "r")
     shader_txt = shader_file.read()
     shader_len = struct.pack("<I", len(shader_txt))
     assets_file.write(shader_len)

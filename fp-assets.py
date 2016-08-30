@@ -237,16 +237,15 @@ for index, offset in enumerate(shader_offsets):
     file_len = struct.unpack("<I", assets_file.read(4))[0]
     file_dat = assets_file.read(file_len)
     out_file = open(os.path.join(assets_dir_path, "shaders", \
-                                 "shader_%d.glsl" % index), "w")
+                                 "shader_%d_vert.glsl" % index), "w")
+    out_file.write(file_dat)
+    file_len = struct.unpack("<I", assets_file.read(4))[0]
+    file_dat = assets_file.read(file_len)
+    out_file = open(os.path.join(assets_dir_path, "shaders", \
+                                 "shader_%d_frag.glsl" % index), "w")
     out_file.write(file_dat)
 
 # next read in files.  These are just 4-byte lengths followed by text.
-#
-# One interesting anomally here is that file_0.txt appears to be a shader.
-# This could mean that SHADER_COUNT ought to be 38, but
-# but I'm very confident that it's supposed to be 37.  I think this one was
-# classified as a file instead of a shader because it's a fragment shader, and
-# all the other shaders are vertex shaders.
 for index, offset in enumerate(file_offsets):
     file_len = struct.unpack("<I", assets_file.read(4))[0]
     file_dat = assets_file.read(file_len)
