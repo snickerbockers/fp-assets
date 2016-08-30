@@ -190,7 +190,8 @@ type_sizes = []
 type_size_file = open(os.path.join(assets_dir_path, "type_sizes.txt"), "r")
 type_size_txt = type_size_file.read().splitlines()
 for i in range(TYPE_SIZE_COUNT):
-    ts = struct.pack("<I", int(type_size_txt[i], 0))
+    ts = int(type_size_txt[i], 0)
+    type_sizes.append(ts)
 
 # now write the offsets block and the type sizes
 assets_file.seek(OFFSETS_START, os.SEEK_SET)
