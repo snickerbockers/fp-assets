@@ -1,5 +1,5 @@
 # fp-assets
-Extractor (and eventually archiver) tool for Freedom Planet's Assets.dat file.
+Extractor/archiver tool for Freedom Planet's Assets.dat file.
 
 ## Usage
 fp-assets.py -c | -x [ -f|--file=<in-file> ] [pathname]
