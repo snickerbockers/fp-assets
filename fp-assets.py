@@ -265,7 +265,9 @@ def write_assets_file(assets_file_path, assets_dir_path):
     preload_file.close()
 
     assets_file.write(preload_data)
-    assert assets_file.tell() == OFFSETS_START
+    if assets_file.tell() != OFFSETS_START:
+        raise ValueError("preload_data has a length of %d (should be %d)" % \
+                         (len(preload_data), OFFSETS_START))
 
     offset_block_size = 4 * (IMG_COUNT + SOUND_COUNT + FONT_COUNT \
                              + SHADER_COUNT + FILE_COUNT + TYPE_SIZE_COUNT)
