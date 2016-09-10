@@ -350,10 +350,13 @@ def extract_all_assets(assets_file_path, assets_dir_path):
     os.mkdir(file_dir, 0755)
     os.mkdir(font_dir, 0755)
 
-    # read in the preload data.  I don't know what to do with this other than
-    # to hold onto it.
+    # read in the preload data.  This doesn't seem to serve any purpose in
+    # Freedom Planet and you can actually zero it out without consequence.
+    # This script dumps it anyways and re-inserts it verbatim when the new
+    # Assets.dat just in case I'm wrong.  At any rate, this keeps binary
+    # patches small.
     preload_data = assets_file.read(OFFSETS_START)
-    preload_data_file = open(preload_file_path, "w")
+    preload_data_file = open(preload_file_path, "wb")
     preload_data_file.write(preload_data)
 
     # read in image offsets
