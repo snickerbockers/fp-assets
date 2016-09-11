@@ -242,7 +242,7 @@ def write_sound(assets_file, sound_path, meta_path):
                                   int(sound_meta_txt[1], 0), \
                                   int(sound_meta_txt[2], 0), \
                                   int(sound_meta_txt[3], 0))
-    sound_file = open(sound_path, "r")
+    sound_file = open(sound_path, "rb")
     sound_data = sound_file.read()
 
     assets_file.write(sound_meta_data)
@@ -416,7 +416,7 @@ def extract_all_assets(assets_file_path, assets_dir_path):
 
         file_len = struct.unpack("<I", assets_file.read(4))[0]
         file_dat = assets_file.read(file_len)
-        out_file = open(os.path.join(audio_dir, "audio_%d.ogg" % index), "w")
+        out_file = open(os.path.join(audio_dir, "audio_%d.ogg" % index), "wb")
         out_file.write(file_dat)
 
     # next read in fonts
