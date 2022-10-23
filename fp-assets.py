@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 ################################################################################
 #
@@ -91,7 +91,7 @@ def extract_font(assets_file, cur_font_dir):
     assets_file should be seek'd to the beginning of the font data before
     calling this function.
     """
-    os.mkdir(cur_font_dir, 0755)
+    os.mkdir(cur_font_dir, 0o755)
 
     font_metrics = {}
     font_metrics['size'], = struct.unpack("<H", assets_file.read(2))
@@ -337,18 +337,18 @@ def write_assets_file(assets_file_path, assets_dir_path):
 
 def extract_all_assets(assets_file_path, assets_dir_path):
     if os.path.exists(assets_dir_path):
-        print "Error: \"%s\" already exists" % assets_dir_path
+        print("Error: \"%s\" already exists" % assets_dir_path)
         exit(1)
 
     init_paths(assets_dir_path)
     assets_file = open(assets_file_path, "rb")
 
-    os.mkdir(assets_dir_path, 0755)
-    os.mkdir(img_dir, 0755)
-    os.mkdir(audio_dir, 0755)
-    os.mkdir(shader_dir, 0755)
-    os.mkdir(file_dir, 0755)
-    os.mkdir(font_dir, 0755)
+    os.mkdir(assets_dir_path, 0o755)
+    os.mkdir(img_dir, 0o755)
+    os.mkdir(audio_dir, 0o755)
+    os.mkdir(shader_dir, 0o755)
+    os.mkdir(file_dir, 0o755)
+    os.mkdir(font_dir, 0o755)
 
     # read in the preload data.  This doesn't seem to serve any purpose in
     # Freedom Planet and you can actually zero it out without consequence.
@@ -455,21 +455,21 @@ if __name__ == "__main__":
             elif option == "-x":
                 do_extract = True
     except GetoptError:
-        print usage_string
+        print(usage_string)
         exit(1)
 
     if len(params) == 1:
         assets_dir_path = params[0]
     elif len(params) != 0:
-        print "Error: extra unparsed arguments: %s" % str(params)
+        print("Error: extra unparsed arguments: %s" % str(params))
         exit(1)
 
     if not (do_compress or do_extract):
-        print "Error: need to specify either compress (-c) or extract (-x)"
+        print("Error: need to specify either compress (-c) or extract (-x)")
         exit(1)
 
     if do_compress and do_extract:
-        print "Error: cannot both compress (-c) and extract (-x) at the same time"
+        print("Error: cannot both compress (-c) and extract (-x) at the same time")
         exit(1)
 
     if do_extract:
