@@ -152,7 +152,7 @@ def extract_text(assets_file, out_file_path):
     """
     file_len = struct.unpack("<I", assets_file.read(4))[0]
     file_dat = assets_file.read(file_len)
-    out_file = open(out_file_path,"w")
+    out_file = open(out_file_path,"wb")
     out_file.write(file_dat)
 
 def init_paths(assets_dir_path):
@@ -250,7 +250,7 @@ def write_sound(assets_file, sound_path, meta_path):
     assets_file.write(sound_data)
 
 def write_text(assets_file, text_file_path):
-    text_file = open(text_file_path, "r")
+    text_file = open(text_file_path, "rb")
     text_data = text_file.read()
     text_len = struct.pack("<I", len(text_data))
     assets_file.write(text_len)
