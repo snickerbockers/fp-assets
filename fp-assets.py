@@ -2,10 +2,12 @@
 
 ################################################################################
 #
+# contact: snickerbockers@washemu.org
+#
 # I choose to release this file into the public domain.
 # I am not responsible for any failures of this program or damage caused by it.
 # You have the right to remove this statement, but I'd prefer it if you didn't.
-#     -- SnickerBockers was here, 2016
+#     -- SnickerBockers was here, 2016, 2023
 #
 ################################################################################
 
@@ -15,19 +17,15 @@ import os
 import zlib
 import sys
 import json
+import hashlib
 from PIL import Image
 from getopt import getopt, GetoptError
-
-OFFSETS_START=0x83fa
-IMG_COUNT=16893
-SOUND_COUNT=475
-FONT_COUNT=1
-SHADER_COUNT=37
-FILE_COUNT=18
-TYPE_SIZE_COUNT = 5
+from chowimg import load_img, compress_img
 
 assets_file_path="Assets.dat"
 assets_dir_path="Assets"
+
+verbose = False
 
 img_dir = None
 audio_dir = None
@@ -39,7 +37,7 @@ preload_file_path = None
 type_sizes_path = None
 
 usage_string = """\
-Usage: %s -c | -x [ -f|--file=<in-file> ] [pathname]
+Usage: %s -c | -x [ -f|--file=<in-file> ] [-m metadata_file] [-r] [pathname]
 
 in-file is a path to your Assets.dat file.  it defaults to ./Assets.dat
 pathname is the path to the directory to be extracted to/created from.
@@ -47,6 +45,8 @@ pathname is the path to the directory to be extracted to/created from.
 
 -c creates a new Assets.dat.
 -x extracts Assets.dat
+-m is the path to a json file describing Assets.dat metadata; this is only required if fp-assets.py cannot auto-identify your file
+-r extracts images as raw "binary blobs" instead of decoding them and converting to PNG; only use this if you *absolutely* understand what you're doing.
 
 extracting will exit with an error if pathname already exists.
 """ % sys.argv[0]
@@ -117,10 +117,10 @@ def extract_font(assets_file, cur_font_dir):
 #     height (16 bits)
 #     The four mystery integers (16 bits * 4)
 #     Compressed file length (32-bits)
-#     Truecolor RGBA quads compressed using the deflate/zlib format.
+#     32-bit RGBA image data, compressed using either zlib or a custom algorithm (see chowimg.py)
 #
 # These are all little-endian values.
-def extract_img(assets_file, out_img_path, out_meta_path):
+def extract_img(assets_file, out_img_path, out_meta_path, raw_images):
     """
     extract an image from assets_file.  The image will be saved in out_img_path
     and the metadata (excluding the image resolution) will be saved as text to
@@ -138,10 +138,24 @@ def extract_img(assets_file, out_img_path, out_meta_path):
         meta_txt.write("0x%x\n" % struct.unpack("<H", assets_file.read(2))[0])
 
     file_len = struct.unpack("<I", assets_file.read(4))[0]
-    file_dat = zlib.decompress(assets_file.read(file_len))
 
-    out_img = Image.frombytes("RGBA", (img_w, img_h), file_dat)
-    out_img.save(os.path.join(img_dir, out_img_path))
+    if raw_images:
+        meta_txt.write("%ux%u\n" % (img_w,img_h))
+        dat = assets_file.read(file_len)
+        outfile = open(os.path.join(img_dir, out_img_path), "wb")
+        outfile.write(dat)
+        outfile.close()
+    else:
+        if image_format == 'chowdren':
+            file_dat = load_img(assets_file, file_len)
+        elif image_format == 'zlib':
+            file_dat = zlib.decompress(assets_file.read(file_len))
+        else:
+            print("unknown image compression format %s" % image_format)
+            exit(1)
+
+        out_img = Image.frombytes("RGBA", (img_w, img_h), bytes(file_dat))
+        out_img.save(os.path.join(img_dir, out_img_path))
 
 def extract_text(assets_file, out_file_path):
     """
@@ -221,7 +235,13 @@ def write_font(assets_file, cur_font_dir):
 def write_img(assets_file, img_path, meta_path):
     img = Image.open(img_path, "r")
     img_w, img_h = img.size
-    data = zlib.compress(img.tobytes(), 9)
+    if image_format == 'zlib':
+        data = zlib.compress(img.tobytes(), 9)
+    else:
+        print("**** BEGIN COMPRESSION OF %s" % img_path)
+        bts = img.tobytes()
+        print("    uncompressed length of %d" % len(bts))
+        data = compress_img(bts)
     img_meta_file = open(meta_path, "r")
     img_meta_txt = img_meta_file.read().splitlines()
     img_meta_data = struct.pack("<HHHH", \
@@ -275,6 +295,8 @@ def write_assets_file(assets_file_path, assets_dir_path):
 
     img_offsets = []
     for img_idx in range(IMG_COUNT):
+        if verbose:
+            print("now saving image %d..." % img_idx)
         img_offsets.append(assets_file.tell())
 
         write_img(assets_file, \
@@ -283,6 +305,8 @@ def write_assets_file(assets_file_path, assets_dir_path):
 
     sound_offsets = []
     for sound_idx in range(SOUND_COUNT):
+        if verbose:
+            print("now saving sound %d..." % sound_idx)
         sound_offsets.append(assets_file.tell())
 
         sound_path = os.path.join(audio_dir, "audio_%d.ogg" % sound_idx)
@@ -291,6 +315,8 @@ def write_assets_file(assets_file_path, assets_dir_path):
 
     font_offsets = []
     for font_idx in range(FONT_COUNT):
+        if verbose:
+            print("now saving font %d..." % font_idx)
         font_offsets.append(assets_file.tell())
 
         n_fonts = 0
@@ -306,6 +332,8 @@ def write_assets_file(assets_file_path, assets_dir_path):
 
     shader_offsets = []
     for shader_idx in range(SHADER_COUNT):
+        if verbose:
+            print("now saving shader %d..." % shader_idx)
         shader_offsets.append(assets_file.tell())
 
         vert_path = os.path.join(shader_dir, "shader_%d_vert.glsl" % shader_idx)
@@ -316,6 +344,8 @@ def write_assets_file(assets_file_path, assets_dir_path):
 
     file_offsets = []
     for file_idx in range(FILE_COUNT):
+        if verbose:
+            print("now saving file %d..." % file_idx)
         file_offsets.append(assets_file.tell())
 
         file_path = os.path.join(file_dir, "file_%d.txt" % file_idx)
@@ -326,16 +356,20 @@ def write_assets_file(assets_file_path, assets_dir_path):
     type_size_file = open(type_sizes_path, "r")
     type_size_txt = type_size_file.read().splitlines()
     for i in range(TYPE_SIZE_COUNT):
+        if verbose:
+            print("now saving type size %d..." % i)
         ts = int(type_size_txt[i], 0)
         type_sizes.append(ts)
 
+    if verbose:
+        print("now writing metadata block...")
     # now write the offsets block and the type sizes
     assets_file.seek(OFFSETS_START, os.SEEK_SET)
     for offset in (img_offsets + sound_offsets + font_offsets + \
                    shader_offsets + file_offsets + type_sizes):
         assets_file.write(struct.pack("<I", offset))
 
-def extract_all_assets(assets_file_path, assets_dir_path):
+def extract_all_assets(assets_file_path, assets_dir_path, fmt, raw_images):
     if os.path.exists(assets_dir_path):
         print("Error: \"%s\" already exists" % assets_dir_path)
         exit(1)
@@ -399,10 +433,15 @@ def extract_all_assets(assets_file_path, assets_dir_path):
     for ts in type_sizes:
         type_size_file.write("0x%x\n" % ts)
 
+    if raw_images:
+        img_ext = "bin"
+    else:
+        img_ext = "png"
     for index, offset in enumerate(img_offsets):
+        print("preparing to extract image %d..." % index)
         assets_file.seek(offset)
-        extract_img(assets_file, "img_%d.png" % index, \
-                    "img_%d_meta.txt" % index)
+        extract_img(assets_file, "img_%d.%s" % (index, img_ext), \
+                    "img_%d_meta.txt" % index, raw_images)
 
     for index, offset in enumerate(sound_offsets):
         assets_file.seek(offset)
@@ -442,11 +481,30 @@ def extract_all_assets(assets_file_path, assets_dir_path):
         assets_file.seek(offset)
         extract_text(assets_file, os.path.join(assets_dir_path, "files", \
                                                "file_%d.txt" % index))
+
+    # save metadata so we have it on hand when we create a new Assets.dat
+    fmt_file = open(os.path.join(assets_dir_path, "format.json"), "w")
+    json.dump(fmt, fmt_file, indent=4)
+    fmt_file.close()
+
+def md5sum(path):
+    hasher = hashlib.md5()
+    stream = open(path, "rb")
+    buf = stream.read(4096)
+    while buf:
+        hasher.update(buf)
+        buf = stream.read(4096)
+    stream.close()
+    return hasher.hexdigest()
+
+
 if __name__ == "__main__":
     do_extract = False
     do_compress = False
+    metadata_json = None
+    raw_images = False
     try:
-        opt_val, params = getopt(sys.argv[1:], "xcf:", ["file="])
+        opt_val, params = getopt(sys.argv[1:], "xcf:m:rv", ["file="])
         for option, value in opt_val:
             if option == "-f" or option == "--in-file":
                 assets_file_path = value
@@ -454,6 +512,12 @@ if __name__ == "__main__":
                 do_compress = True
             elif option == "-x":
                 do_extract = True
+            elif option == "-m":
+                metadata_json = value
+            elif option == "-r":
+                raw_images = True
+            elif option == "-v":
+                verbose = True
     except GetoptError:
         print(usage_string)
         exit(1)
@@ -473,8 +537,77 @@ if __name__ == "__main__":
         exit(1)
 
     if do_extract:
+        csum = md5sum(assets_file_path)
+        print("assets file has a checksum of %s" % csum)
+        if metadata_json is None:
+            # latest version (as of may 2023).  fb95f5c is linux, 4085c98 is windows
+            if csum == "fb95f5c4809e76cae933be20ca51a660" or csum == "4085c983fb918703ce459f17f69c474c":
+                format_string = """
+                {
+                "OFFSETS_START" : 34324,
+                "IMG_COUNT"  : 17162,
+                "SOUND_COUNT" : 475,
+                "FONT_COUNT" : 0,
+                "SHADER_COUNT" : 95,
+                "FILE_COUNT" : 18,
+                "TYPE_SIZE_COUNT" : 5,
+                "image_format" : "chowdren"
+                }
+                """
+            elif csum == "f14f24317d0323d63231cdbba511f254":
+                format_string = """
+                {
+                "OFFSETS_START" : 33786,
+                "IMG_COUNT" : 16893,
+                "SOUND_COUNT" : 475,
+                "FONT_COUNT" : 1,
+                "SHADER_COUNT" : 37,
+                "FILE_COUNT" : 18,
+                "TYPE_SIZE_COUNT" : 5,
+                "image_format" : "zlib"
+                }
+                """
+            else:
+                print("unrecognized assets file with md5sum %s" % csum)
+                print("you will need to supply your own metadata json files with the -m option")
+                exit(1)
+            print("csum %s is recognized as an official release, and its metadata is known" % csum)
+        else:
+            metadata_file = open(metadata_json, "r")
+            format_string = metadata_file.read()
+            metadata_file.close()
+
+        fmt = json.loads(format_string)
+        OFFSETS_START = int(fmt['OFFSETS_START'])
+        IMG_COUNT = int(fmt['IMG_COUNT'])
+        SOUND_COUNT = int(fmt['SOUND_COUNT'])
+        FONT_COUNT = int(fmt['FONT_COUNT'])
+        SHADER_COUNT = int(fmt['SHADER_COUNT'])
+        FILE_COUNT = int(fmt['FILE_COUNT'])
+        TYPE_SIZE_COUNT = int(fmt['TYPE_SIZE_COUNT'])
+        image_format = fmt['image_format']
+
         extract_all_assets(assets_file_path=assets_file_path, \
-                           assets_dir_path=assets_dir_path)
+                           assets_dir_path=assets_dir_path,
+                           fmt=fmt, raw_images=raw_images)
 
     if do_compress:
+        if metadata_json is None:
+            metadata_json = os.path.join(assets_dir_path, 'format.json')
+        try:
+            with open(metadata_json, 'r') as meta_file:
+                format_string = meta_file.read()
+                fmt = json.loads(format_string)
+                OFFSETS_START = int(fmt['OFFSETS_START'])
+                IMG_COUNT = int(fmt['IMG_COUNT'])
+                SOUND_COUNT = int(fmt['SOUND_COUNT'])
+                FONT_COUNT = int(fmt['FONT_COUNT'])
+                SHADER_COUNT = int(fmt['SHADER_COUNT'])
+                FILE_COUNT = int(fmt['FILE_COUNT'])
+                TYPE_SIZE_COUNT = int(fmt['TYPE_SIZE_COUNT'])
+                image_format = fmt['image_format']
+        except FileNotFoundError:
+            print("ERROR: unable to open %s ; please proved path to a valid metadata json file with the -m option" % metadata_json, file = sys.stderr)
+            exit(1)
+
         write_assets_file(assets_file_path, assets_dir_path)
