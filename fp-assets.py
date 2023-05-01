@@ -2,10 +2,12 @@
 
 ################################################################################
 #
+# contact: snickerbockers@washemu.org
+#
 # I choose to release this file into the public domain.
 # I am not responsible for any failures of this program or damage caused by it.
 # You have the right to remove this statement, but I'd prefer it if you didn't.
-#     -- SnickerBockers was here, 2016
+#     -- SnickerBockers was here, 2016, 2023
 #
 ################################################################################
 
@@ -15,16 +17,18 @@ import os
 import zlib
 import sys
 import json
+import hashlib
 from PIL import Image
 from getopt import getopt, GetoptError
+from chowimg import load_img
 
-OFFSETS_START=0x83fa
-IMG_COUNT=16893
-SOUND_COUNT=475
-FONT_COUNT=1
-SHADER_COUNT=37
-FILE_COUNT=18
-TYPE_SIZE_COUNT = 5
+# OFFSETS_START=0x83fa
+# IMG_COUNT=16893
+# SOUND_COUNT=475
+# FONT_COUNT=1
+# SHADER_COUNT=37
+# FILE_COUNT=18
+# TYPE_SIZE_COUNT = 5
 
 assets_file_path="Assets.dat"
 assets_dir_path="Assets"
@@ -117,7 +121,7 @@ def extract_font(assets_file, cur_font_dir):
 #     height (16 bits)
 #     The four mystery integers (16 bits * 4)
 #     Compressed file length (32-bits)
-#     Truecolor RGBA quads compressed using the deflate/zlib format.
+#     32-bit RGBA image data, compressed using either zlib or a custom algorithm (see chowimg.py)
 #
 # These are all little-endian values.
 def extract_img(assets_file, out_img_path, out_meta_path):
@@ -138,9 +142,16 @@ def extract_img(assets_file, out_img_path, out_meta_path):
         meta_txt.write("0x%x\n" % struct.unpack("<H", assets_file.read(2))[0])
 
     file_len = struct.unpack("<I", assets_file.read(4))[0]
-    file_dat = zlib.decompress(assets_file.read(file_len))
 
-    out_img = Image.frombytes("RGBA", (img_w, img_h), file_dat)
+    if image_format == 'chowdren':
+        file_dat = load_img(assets_file, file_len)
+    elif image_format == 'zlib':
+        file_dat = zlib.decompress(assets_file.read(file_len))
+    else:
+        print("unknown image compression format %s" % image_format)
+        exit(1)
+
+    out_img = Image.frombytes("RGBA", (img_w, img_h), bytes(file_dat))
     out_img.save(os.path.join(img_dir, out_img_path))
 
 def extract_text(assets_file, out_file_path):
@@ -442,6 +453,17 @@ def extract_all_assets(assets_file_path, assets_dir_path):
         assets_file.seek(offset)
         extract_text(assets_file, os.path.join(assets_dir_path, "files", \
                                                "file_%d.txt" % index))
+def md5sum(path):
+    hasher = hashlib.md5()
+    stream = open(path, "rb")
+    buf = stream.read(4096)
+    while buf:
+        hasher.update(buf)
+        buf = stream.read(4096)
+    stream.close()
+    return hasher.hexdigest()
+
+
 if __name__ == "__main__":
     do_extract = False
     do_compress = False
@@ -473,6 +495,32 @@ if __name__ == "__main__":
         exit(1)
 
     if do_extract:
+        csum = md5sum(assets_file_path)
+        # latest version (as of may 2023).  fb95f5c is linux, 4085c98 is windows
+        if csum == "fb95f5c4809e76cae933be20ca51a660" or csum == "4085c983fb918703ce459f17f69c474c":
+            OFFSETS_START=0x8614
+            IMG_COUNT=17162
+            SOUND_COUNT=475
+            FONT_COUNT=0 # is this right???
+            SHADER_COUNT=95
+            FILE_COUNT=18
+            TYPE_SIZE_COUNT = 5
+            image_format = "chowdren"
+        elif csum == "f14f24317d0323d63231cdbba511f254":
+            OFFSETS_START=0x83fa
+            IMG_COUNT=16893
+            SOUND_COUNT=475
+            FONT_COUNT=1
+            SHADER_COUNT=37
+            FILE_COUNT=18
+            TYPE_SIZE_COUNT = 5
+            image_format = "zlib"
+        else:
+            print("unrecognized assets file with md5sum %s" % csum)
+            exit(1)
+
+        print("assets file has a checksum of %s - this is a supported format" % csum)
+
         extract_all_assets(assets_file_path=assets_file_path, \
                            assets_dir_path=assets_dir_path)
 
