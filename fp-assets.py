@@ -22,14 +22,6 @@ from PIL import Image
 from getopt import getopt, GetoptError
 from chowimg import load_img
 
-# OFFSETS_START=0x83fa
-# IMG_COUNT=16893
-# SOUND_COUNT=475
-# FONT_COUNT=1
-# SHADER_COUNT=37
-# FILE_COUNT=18
-# TYPE_SIZE_COUNT = 5
-
 assets_file_path="Assets.dat"
 assets_dir_path="Assets"
 
@@ -346,7 +338,7 @@ def write_assets_file(assets_file_path, assets_dir_path):
                    shader_offsets + file_offsets + type_sizes):
         assets_file.write(struct.pack("<I", offset))
 
-def extract_all_assets(assets_file_path, assets_dir_path):
+def extract_all_assets(assets_file_path, assets_dir_path, fmt):
     if os.path.exists(assets_dir_path):
         print("Error: \"%s\" already exists" % assets_dir_path)
         exit(1)
@@ -453,6 +445,12 @@ def extract_all_assets(assets_file_path, assets_dir_path):
         assets_file.seek(offset)
         extract_text(assets_file, os.path.join(assets_dir_path, "files", \
                                                "file_%d.txt" % index))
+
+    # save metadata so we have it on hand when we create a new Assets.dat
+    fmt_file = open(os.path.join(assets_dir_path, "format.json"), "w")
+    json.dump(fmt, fmt_file, indent=4)
+    fmt_file.close()
+
 def md5sum(path):
     hasher = hashlib.md5()
     stream = open(path, "rb")
@@ -467,8 +465,9 @@ def md5sum(path):
 if __name__ == "__main__":
     do_extract = False
     do_compress = False
+    metadata_json = None
     try:
-        opt_val, params = getopt(sys.argv[1:], "xcf:", ["file="])
+        opt_val, params = getopt(sys.argv[1:], "xcf:m:", ["file="])
         for option, value in opt_val:
             if option == "-f" or option == "--in-file":
                 assets_file_path = value
@@ -476,6 +475,8 @@ if __name__ == "__main__":
                 do_compress = True
             elif option == "-x":
                 do_extract = True
+            elif option == "-m":
+                metadata_json = value
     except GetoptError:
         print(usage_string)
         exit(1)
@@ -496,33 +497,58 @@ if __name__ == "__main__":
 
     if do_extract:
         csum = md5sum(assets_file_path)
-        # latest version (as of may 2023).  fb95f5c is linux, 4085c98 is windows
-        if csum == "fb95f5c4809e76cae933be20ca51a660" or csum == "4085c983fb918703ce459f17f69c474c":
-            OFFSETS_START=0x8614
-            IMG_COUNT=17162
-            SOUND_COUNT=475
-            FONT_COUNT=0 # is this right???
-            SHADER_COUNT=95
-            FILE_COUNT=18
-            TYPE_SIZE_COUNT = 5
-            image_format = "chowdren"
-        elif csum == "f14f24317d0323d63231cdbba511f254":
-            OFFSETS_START=0x83fa
-            IMG_COUNT=16893
-            SOUND_COUNT=475
-            FONT_COUNT=1
-            SHADER_COUNT=37
-            FILE_COUNT=18
-            TYPE_SIZE_COUNT = 5
-            image_format = "zlib"
+        print("assets file has a checksum of %s" % csum)
+        if metadata_json is None:
+            # latest version (as of may 2023).  fb95f5c is linux, 4085c98 is windows
+            if csum == "fb95f5c4809e76cae933be20ca51a660" or csum == "4085c983fb918703ce459f17f69c474c":
+                format_string = """
+                {
+                "OFFSETS_START" : 34324,
+                "IMG_COUNT"  : 17162,
+                "SOUND_COUNT" : 475,
+                "FONT_COUNT" : 0,
+                "SHADER_COUNT" : 95,
+                "FILE_COUNT" : 18,
+                "TYPE_SIZE_COUNT" : 5,
+                "image_format" : "chowdren"
+                }
+                """
+            elif csum == "f14f24317d0323d63231cdbba511f254":
+                format_string = """
+                {
+                "OFFSETS_START" : 33786,
+                "IMG_COUNT" : 16893,
+                "SOUND_COUNT" : 475,
+                "FONT_COUNT" : 1,
+                "SHADER_COUNT" : 37,
+                "FILE_COUNT" : 18,
+                "TYPE_SIZE_COUNT" : 5,
+                "image_format" : "zlib"
+                }
+                """
+            else:
+                print("unrecognized assets file with md5sum %s" % csum)
+                print("you will need to supply your own metadata json files with the -m option")
+                exit(1)
+            print("csum %s is recognized as an official release, and its metadata is known" % csum)
         else:
-            print("unrecognized assets file with md5sum %s" % csum)
-            exit(1)
+            metadata_file = open(metadata_json, "r")
+            format_string = metadata_file.read()
+            metadata_file.close()
 
-        print("assets file has a checksum of %s - this is a supported format" % csum)
+        fmt = json.loads(format_string)
+        OFFSETS_START = int(fmt['OFFSETS_START'])
+        IMG_COUNT = int(fmt['IMG_COUNT'])
+        SOUND_COUNT = int(fmt['SOUND_COUNT'])
+        FONT_COUNT = int(fmt['FONT_COUNT'])
+        SHADER_COUNT = int(fmt['SHADER_COUNT'])
+        FILE_COUNT = int(fmt['FILE_COUNT'])
+        TYPE_SIZE_COUNT = int(fmt['TYPE_SIZE_COUNT'])
+        image_format = fmt['image_format']
 
         extract_all_assets(assets_file_path=assets_file_path, \
-                           assets_dir_path=assets_dir_path)
+                           assets_dir_path=assets_dir_path,
+                           fmt=fmt)
 
     if do_compress:
         write_assets_file(assets_file_path, assets_dir_path)
