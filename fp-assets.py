@@ -35,7 +35,7 @@ preload_file_path = None
 type_sizes_path = None
 
 usage_string = """\
-Usage: %s -c | -x [ -f|--file=<in-file> ] [pathname]
+Usage: %s -c | -x [ -f|--file=<in-file> ] [-m metadata_file] [-r] [pathname]
 
 in-file is a path to your Assets.dat file.  it defaults to ./Assets.dat
 pathname is the path to the directory to be extracted to/created from.
@@ -43,6 +43,8 @@ pathname is the path to the directory to be extracted to/created from.
 
 -c creates a new Assets.dat.
 -x extracts Assets.dat
+-m is the path to a json file describing Assets.dat metadata; this is only required if fp-assets.py cannot auto-identify your file
+-r extracts images as raw "binary blobs" instead of decoding them and converting to PNG; only use this if you *absolutely* understand what you're doing.
 
 extracting will exit with an error if pathname already exists.
 """ % sys.argv[0]
@@ -116,7 +118,7 @@ def extract_font(assets_file, cur_font_dir):
 #     32-bit RGBA image data, compressed using either zlib or a custom algorithm (see chowimg.py)
 #
 # These are all little-endian values.
-def extract_img(assets_file, out_img_path, out_meta_path):
+def extract_img(assets_file, out_img_path, out_meta_path, raw_images):
     """
     extract an image from assets_file.  The image will be saved in out_img_path
     and the metadata (excluding the image resolution) will be saved as text to
@@ -135,16 +137,23 @@ def extract_img(assets_file, out_img_path, out_meta_path):
 
     file_len = struct.unpack("<I", assets_file.read(4))[0]
 
-    if image_format == 'chowdren':
-        file_dat = load_img(assets_file, file_len)
-    elif image_format == 'zlib':
-        file_dat = zlib.decompress(assets_file.read(file_len))
+    if raw_images:
+        meta_txt.write("%ux%u\n" % (img_w,img_h))
+        dat = assets_file.read(file_len)
+        outfile = open(os.path.join(img_dir, out_img_path), "wb")
+        outfile.write(dat)
+        outfile.close()
     else:
-        print("unknown image compression format %s" % image_format)
-        exit(1)
+        if image_format == 'chowdren':
+            file_dat = load_img(assets_file, file_len)
+        elif image_format == 'zlib':
+            file_dat = zlib.decompress(assets_file.read(file_len))
+        else:
+            print("unknown image compression format %s" % image_format)
+            exit(1)
 
-    out_img = Image.frombytes("RGBA", (img_w, img_h), bytes(file_dat))
-    out_img.save(os.path.join(img_dir, out_img_path))
+        out_img = Image.frombytes("RGBA", (img_w, img_h), bytes(file_dat))
+        out_img.save(os.path.join(img_dir, out_img_path))
 
 def extract_text(assets_file, out_file_path):
     """
@@ -338,7 +347,7 @@ def write_assets_file(assets_file_path, assets_dir_path):
                    shader_offsets + file_offsets + type_sizes):
         assets_file.write(struct.pack("<I", offset))
 
-def extract_all_assets(assets_file_path, assets_dir_path, fmt):
+def extract_all_assets(assets_file_path, assets_dir_path, fmt, raw_images):
     if os.path.exists(assets_dir_path):
         print("Error: \"%s\" already exists" % assets_dir_path)
         exit(1)
@@ -402,10 +411,14 @@ def extract_all_assets(assets_file_path, assets_dir_path, fmt):
     for ts in type_sizes:
         type_size_file.write("0x%x\n" % ts)
 
+    if raw_images:
+        img_ext = "bin"
+    else:
+        img_ext = "png"
     for index, offset in enumerate(img_offsets):
         assets_file.seek(offset)
-        extract_img(assets_file, "img_%d.png" % index, \
-                    "img_%d_meta.txt" % index)
+        extract_img(assets_file, "img_%d.%s" % (index, img_ext), \
+                    "img_%d_meta.txt" % index, raw_images)
 
     for index, offset in enumerate(sound_offsets):
         assets_file.seek(offset)
@@ -466,8 +479,9 @@ if __name__ == "__main__":
     do_extract = False
     do_compress = False
     metadata_json = None
+    raw_images = False
     try:
-        opt_val, params = getopt(sys.argv[1:], "xcf:m:", ["file="])
+        opt_val, params = getopt(sys.argv[1:], "xcf:m:r", ["file="])
         for option, value in opt_val:
             if option == "-f" or option == "--in-file":
                 assets_file_path = value
@@ -477,6 +491,8 @@ if __name__ == "__main__":
                 do_extract = True
             elif option == "-m":
                 metadata_json = value
+            elif option == "-r":
+                raw_images = True
     except GetoptError:
         print(usage_string)
         exit(1)
@@ -548,7 +564,7 @@ if __name__ == "__main__":
 
         extract_all_assets(assets_file_path=assets_file_path, \
                            assets_dir_path=assets_dir_path,
-                           fmt=fmt)
+                           fmt=fmt, raw_images=raw_images)
 
     if do_compress:
         write_assets_file(assets_file_path, assets_dir_path)
