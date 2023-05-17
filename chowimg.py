@@ -85,24 +85,63 @@ def load_img(infile, compressed_len):
     return img_dat
 
 if __name__=='__main__':
-    usage_string="Usage: %s <in-file.bin> <out-file.png>" % sys.argv[0]
+    usage_string="Usage: %s -x|-c <in-file> <out-file>" % sys.argv[0]
 
-    if len(sys.argv) != 3:
-        print(usage_string);
-        exit(1);
+    # mode 0 - indeterminate
+    # mode 1 - eXtract
+    # mode 2 - Compress
+    mode = 0
+    width = -1
+    height = -1
 
-    infile = open(sys.argv[1], "rb")
+    try:
+        opt_val, params = getopt(sys.argv[1:], "xcw:h:")
+        for option, value in opt_val:
+            if option == "-x":
+                if mode == 2:
+                    print(usage_string)
+                    exit(1)
+                mode = 1
+            elif option == "-c":
+                if mode == 1:
+                    print(usage_string)
+                    exit(1)
+                mode = 2
+            elif option == "-w":
+                width = int(value)
+            elif option == "-h":
+                height = int(value)
+    except GetoptError:
+        print(usage_string)
+        exit(1)
 
-    infile.seek(0, 2)
-    compressed_len = infile.tell()
-    infile.seek(0)
+    if len(params) != 2 or (mode != 1 and mode != 2):
+        print(usage_string)
+        exit(1)
 
-    img_dat = load_img(infile, compressed_len)
+    if mode == 1:
+        print("extraction selected")
+        if width < 0 or height < 0:
+            print("WIDTH AND HEIGHT NOT INPUT; RUN WITH -w AND -h options")
+            exit(1)
+        print("requested dimensions are %ux%u" % (width, height))
 
-    infile.close()
-    print("total uncompressed image length is %u bytes" % len(img_dat))
+        infile = open(params[0], "rb")
 
-    outfile = open(sys.argv[2], "wb")
-    for byte in img_dat:
-        outfile.write(byte.to_bytes(1,byteorder='big'))
-    outfile.close()
+        infile.seek(0, 2)
+        compressed_len = infile.tell()
+        infile.seek(0)
+
+        img_dat = load_img(infile, compressed_len)
+
+        infile.close()
+        print("total uncompressed image length is %u bytes" % len(img_dat))
+
+        img_obj = Image.frombytes("RGBA", (width, height), bytes(img_dat))
+        img_obj.save(params[1])
+    elif mode == 2:
+        pass
+    else:
+        # should be impossible to get here anyways
+        print(usage_string)
+        exit(1)
