@@ -16,6 +16,10 @@ import struct
 from PIL import Image
 from getopt import getopt, GetoptError
 
+# stats kept for verbose (-v) mode
+# i use this for debugging
+hunk_count = 0
+
 def load_vll(infile, first_nibble):
     bytes_read = 0
     vll = first_nibble
@@ -28,12 +32,10 @@ def load_vll(infile, first_nibble):
     return (vll, bytes_read)
 
 
-def load_hunk(infile, verbose=0):
+def load_hunk(infile, verbose=False):
     hunk = []
 
     hunk_len = struct.unpack("<I", infile.read(4))[0]
-    if verbose:
-        print("first hunk has a length of %d bytes" % hunk_len)
 
     bytes_read = 0
 
@@ -49,43 +51,42 @@ def load_hunk(infile, verbose=0):
             hunk.append(struct.unpack("B", infile.read(1))[0])
             bytes_read += 1
 
-        if verbose:
-            print("there are currently %d bytes decompressed" % len(hunk))
-
         if bytes_read >= hunk_len:
             break
 
         # now for the sliding window
-        window_start = len(hunk) - struct.unpack("<H", infile.read(2))[0]
+        rewind_distance = struct.unpack("<H", infile.read(2))[0]
+        window_start = len(hunk) - rewind_distance
         bytes_read += 2
         window_byte_count, vll_len = load_vll(infile, ctrl_byte & 0xf)
         window_byte_count += 4
         bytes_read += vll_len
 
-        if verbose:
-            print("next copy %u bytes from the sliding window starting from %u" %
-                  (window_byte_count, window_start))
-
         for index in range(window_byte_count):
             hunk.append(hunk[window_start + index])
 
         if verbose:
-            print("hunk is now %u bytes" % len(hunk))
-            print("%u bytes left to process in hunk" % (hunk_len - bytes_read))
+            print("\t\t%u literal bytes, %u repeat bytes starting %u from the end" % (literal_byte_count, window_byte_count, rewind_distance))
 
     return (hunk, bytes_read + 4)
 
-def load_img(infile, compressed_len):
+def load_img(infile, compressed_len, verbose=False):
     img_dat = []
     total_bytes_read = 0
+    hunk_count = 0
     while total_bytes_read < compressed_len:
-        hunk, bytes_read = load_hunk(infile)
+        if verbose:
+            print("begin hunk number %u" % hunk_count)
+        hunk, bytes_read = load_hunk(infile, verbose)
         img_dat += hunk
         total_bytes_read += bytes_read
+        hunk_count += 1
+    print("total hunk count: %u" % hunk_count)
+
     return img_dat
 
 if __name__=='__main__':
-    usage_string="Usage: %s -x|-c <in-file> <out-file>" % sys.argv[0]
+    usage_string="Usage: %s [-v] -x|-c <in-file> <out-file>" % sys.argv[0]
 
     # mode 0 - indeterminate
     # mode 1 - eXtract
@@ -93,9 +94,10 @@ if __name__=='__main__':
     mode = 0
     width = -1
     height = -1
+    verbose = False
 
     try:
-        opt_val, params = getopt(sys.argv[1:], "xcw:h:")
+        opt_val, params = getopt(sys.argv[1:], "xcw:h:v")
         for option, value in opt_val:
             if option == "-x":
                 if mode == 2:
@@ -111,6 +113,8 @@ if __name__=='__main__':
                 width = int(value)
             elif option == "-h":
                 height = int(value)
+            elif option == "-v":
+                verbose = True
     except GetoptError:
         print(usage_string)
         exit(1)
@@ -132,7 +136,7 @@ if __name__=='__main__':
         compressed_len = infile.tell()
         infile.seek(0)
 
-        img_dat = load_img(infile, compressed_len)
+        img_dat = load_img(infile, compressed_len, verbose)
 
         infile.close()
         print("total uncompressed image length is %u bytes" % len(img_dat))
