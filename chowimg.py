@@ -16,6 +16,7 @@ import struct
 from PIL import Image
 from getopt import getopt, GetoptError
 from copy import copy
+from array import array
 
 # stats kept for verbose (-v) mode
 # i use this for debugging
@@ -119,14 +120,15 @@ class subhunk:
         self.replay_len = 0
 
 class compressor:
-    def __init__(self):
-        self.window = [ ]
+    def __init__(self, verbose = False):
+        self.window = array('B')
         self.state = "LITERAL"
-        self.cur_match = [ ]
+        self.cur_match = array('B')
         self.cur_match_start = -1
         self.window_end = 0
-        self.literal = [ ]
+        self.literal = array('B')
         self.uncompressed_len = 0
+        self.verbose = verbose
 
         # list of subhunk structures
         self.sub = [ ]
@@ -143,9 +145,18 @@ class compressor:
         match = -1
         if len(query) > len(base):
             return -1
-        for idx in range(len(base) - len(query) + 1):
-            if query == base[idx:idx+len(query)]:
-                match = idx
+
+        start = 0
+        stop = len(base) - len(query) + 1
+
+        while start < stop:
+            try:
+                idx = base.index(query[0], start, stop)
+                if query == base[idx:idx+len(query)]:
+                    match = idx
+                start = idx + 1
+            except ValueError:
+                break
         return match
 
     @staticmethod
@@ -187,7 +198,7 @@ class compressor:
                         # allow for replays of less than four bytes, so add this
                         # to the literal instead.
                         self.literal += self.cur_match
-                        self.cur_match = []
+                        self.cur_match = array('B')
                         self.state = "LITERAL"
                         continue
 
@@ -200,19 +211,20 @@ class compressor:
                     self.sub[-1].rewind = self.window_end - self.cur_match_start
                     self.sub[-1].replay_len = len(self.cur_match)
 
-                    if len(self.cur_match):
-                        print("%d literal bytes, %d repeat bytes starting %d from the end (index %d)" % \
-                              (len(self.literal), len(self.cur_match), self.window_end - self.cur_match_start, self.cur_match_start))
-                    else:
-                        print("%d literal bytes, %d repeat bytes starting XXX from the end" % (len(self.literal), len(self.cur_match)))
+                    if self.verbose:
+                        if len(self.cur_match):
+                            print("%d literal bytes, %d repeat bytes starting %d from the end (index %d)" % \
+                                  (len(self.literal), len(self.cur_match), self.window_end - self.cur_match_start, self.cur_match_start))
+                        else:
+                            print("%d literal bytes, %d repeat bytes starting XXX from the end" % (len(self.literal), len(self.cur_match)))
 
                     self.uncompressed_len += len(self.literal) + len(self.cur_match)
                     if self.uncompressed_len != len(self.window):
                         print("WARNING: self.uncompressed_len is %d but len(self.window) is %d" % (self.uncompressed_len, len(self.window)), file=sys.stderr)
                     # reset state machine
                     self.state = "LITERAL"
-                    self.literal = [ ]
-                    self.cur_match = [ ]
+                    self.literal = array('B')
+                    self.cur_match = array('B')
             else:
                 if cur_byte in self.window:
                     self.state = "REWIND"
@@ -233,8 +245,8 @@ class compressor:
                 self.sub[-1].rewind = self.window_end - self.cur_match_start
                 self.sub[-1].replay_len = len(self.cur_match)
                 print("final subhunk added: %d literal bytes, %d rewind, %d replay bytes" % (len(self.sub[-1].literal), self.sub[-1].rewind, self.sub[-1].replay_len))
-            self.literal = []
-            self.cur_match = []
+            self.literal = array('B')
+            self.cur_match = array('B')
 
         # compile the subhunks into raw binary data
         data = bytes()
@@ -275,8 +287,8 @@ class compressor:
         # write data to file
         stream.write(self.get_raw_data())
 
-def compress_img(rawdat):
-    comp = compressor()
+def compress_img(rawdat, verbose=False):
+    comp = compressor(verbose=verbose)
     for bt in rawdat:
         comp.push_byte(bt)
     return comp.get_raw_data()
@@ -310,6 +322,7 @@ if __name__=='__main__':
             elif option == "-h":
                 height = int(value)
             elif option == "-v":
+                print("verbose mode enabled", file=sys.stderr)
                 verbose = True
     except GetoptError:
         print(usage_string)
@@ -342,7 +355,7 @@ if __name__=='__main__':
         img_obj.save(params[1])
     elif mode == 2:
         with open(params[1], "wb") as outf:
-            outf.write(compress_img(Image.open(params[0]).tobytes()))
+            outf.write(compress_img(Image.open(params[0]).tobytes(), verbose=verbose))
     else:
         # should be impossible to get here anyways
         print(usage_string)
