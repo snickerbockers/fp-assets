@@ -16,7 +16,6 @@ import struct
 from PIL import Image
 from getopt import getopt, GetoptError
 from copy import copy
-from array import array
 
 # stats kept for verbose (-v) mode
 # i use this for debugging
@@ -32,7 +31,6 @@ def load_vll(infile, first_nibble):
             bytes_read += 1
             vll += latest_byte
     return (vll, bytes_read)
-
 
 def load_hunk(infile, verbose=False):
     hunk = []
@@ -121,43 +119,17 @@ class subhunk:
 
 class compressor:
     def __init__(self, verbose = False):
-        self.window = array('B')
+        self.window = bytearray()
         self.state = "LITERAL"
-        self.cur_match = array('B')
+        self.cur_match = bytearray()
         self.cur_match_start = -1
         self.window_end = 0
-        self.literal = array('B')
+        self.literal = bytearray()
         self.uncompressed_len = 0
         self.verbose = verbose
 
         # list of subhunk structures
         self.sub = [ ]
-
-    @staticmethod
-    def subseq(query, base):
-        """
-        subseq - search for subsequences
-
-        returns the index of the beginning of the ~~first~~ last instance of query in base
-        query and base should both be lists
-        returns -1 if query does not appear within base
-        """
-        match = -1
-        if len(query) > len(base):
-            return -1
-
-        start = 0
-        stop = len(base) - len(query) + 1
-
-        while start < stop:
-            try:
-                idx = base.index(query[0], start, stop)
-                if query == base[idx:idx+len(query)]:
-                    match = idx
-                start = idx + 1
-            except ValueError:
-                break
-        return match
 
     @staticmethod
     def encode_vll(val):
@@ -180,12 +152,16 @@ class compressor:
         return seq
 
     def push_byte(self, cur_byte):
+        if len(self.window) >= 65536:
+            print("ERROR: need to implement multiple hunks")
+            exit(1)
+
         while True:
             if self.state == "REWIND":
                 next_match = copy(self.cur_match)
                 next_match.append(cur_byte)
 
-                subseq_start = compressor.subseq(next_match, self.window)
+                subseq_start = self.window.rfind(next_match)
                 if subseq_start >= 0:
                     # add cur_byte to self.cur_match and self.window
                     self.cur_match = next_match
@@ -198,7 +174,7 @@ class compressor:
                         # allow for replays of less than four bytes, so add this
                         # to the literal instead.
                         self.literal += self.cur_match
-                        self.cur_match = array('B')
+                        self.cur_match = bytearray()
                         self.state = "LITERAL"
                         continue
 
@@ -223,8 +199,8 @@ class compressor:
                         print("WARNING: self.uncompressed_len is %d but len(self.window) is %d" % (self.uncompressed_len, len(self.window)), file=sys.stderr)
                     # reset state machine
                     self.state = "LITERAL"
-                    self.literal = array('B')
-                    self.cur_match = array('B')
+                    self.literal = bytearray()
+                    self.cur_match = bytearray()
             else:
                 if cur_byte in self.window:
                     self.state = "REWIND"
@@ -245,8 +221,8 @@ class compressor:
                 self.sub[-1].rewind = self.window_end - self.cur_match_start
                 self.sub[-1].replay_len = len(self.cur_match)
                 print("final subhunk added: %d literal bytes, %d rewind, %d replay bytes" % (len(self.sub[-1].literal), self.sub[-1].rewind, self.sub[-1].replay_len))
-            self.literal = array('B')
-            self.cur_match = array('B')
+            self.literal = bytearray()
+            self.cur_match = bytearray()
 
         # compile the subhunks into raw binary data
         data = bytes()

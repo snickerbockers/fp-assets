@@ -20,10 +20,12 @@ import json
 import hashlib
 from PIL import Image
 from getopt import getopt, GetoptError
-from chowimg import load_img
+from chowimg import load_img, compress_img
 
 assets_file_path="Assets.dat"
 assets_dir_path="Assets"
+
+verbose = False
 
 img_dir = None
 audio_dir = None
@@ -233,7 +235,10 @@ def write_font(assets_file, cur_font_dir):
 def write_img(assets_file, img_path, meta_path):
     img = Image.open(img_path, "r")
     img_w, img_h = img.size
-    data = zlib.compress(img.tobytes(), 9)
+    if image_format == 'zlib':
+        data = zlib.compress(img.tobytes(), 9)
+    else:
+        data = compress_img(img.tobytes())
     img_meta_file = open(meta_path, "r")
     img_meta_txt = img_meta_file.read().splitlines()
     img_meta_data = struct.pack("<HHHH", \
@@ -287,6 +292,8 @@ def write_assets_file(assets_file_path, assets_dir_path):
 
     img_offsets = []
     for img_idx in range(IMG_COUNT):
+        if verbose:
+            print("now saving image %d..." % img_idx)
         img_offsets.append(assets_file.tell())
 
         write_img(assets_file, \
@@ -295,6 +302,8 @@ def write_assets_file(assets_file_path, assets_dir_path):
 
     sound_offsets = []
     for sound_idx in range(SOUND_COUNT):
+        if verbose:
+            print("now saving sound %d..." % sound_idx)
         sound_offsets.append(assets_file.tell())
 
         sound_path = os.path.join(audio_dir, "audio_%d.ogg" % sound_idx)
@@ -303,6 +312,8 @@ def write_assets_file(assets_file_path, assets_dir_path):
 
     font_offsets = []
     for font_idx in range(FONT_COUNT):
+        if verbose:
+            print("now saving font %d..." % font_idx)
         font_offsets.append(assets_file.tell())
 
         n_fonts = 0
@@ -318,6 +329,8 @@ def write_assets_file(assets_file_path, assets_dir_path):
 
     shader_offsets = []
     for shader_idx in range(SHADER_COUNT):
+        if verbose:
+            print("now saving shader %d..." % shader_idx)
         shader_offsets.append(assets_file.tell())
 
         vert_path = os.path.join(shader_dir, "shader_%d_vert.glsl" % shader_idx)
@@ -328,6 +341,8 @@ def write_assets_file(assets_file_path, assets_dir_path):
 
     file_offsets = []
     for file_idx in range(FILE_COUNT):
+        if verbose:
+            print("now saving file %d..." % file_idx)
         file_offsets.append(assets_file.tell())
 
         file_path = os.path.join(file_dir, "file_%d.txt" % file_idx)
@@ -338,9 +353,13 @@ def write_assets_file(assets_file_path, assets_dir_path):
     type_size_file = open(type_sizes_path, "r")
     type_size_txt = type_size_file.read().splitlines()
     for i in range(TYPE_SIZE_COUNT):
+        if verbose:
+            print("now saving type size %d..." % i)
         ts = int(type_size_txt[i], 0)
         type_sizes.append(ts)
 
+    if verbose:
+        print("now writing metadata block...")
     # now write the offsets block and the type sizes
     assets_file.seek(OFFSETS_START, os.SEEK_SET)
     for offset in (img_offsets + sound_offsets + font_offsets + \
@@ -481,7 +500,7 @@ if __name__ == "__main__":
     metadata_json = None
     raw_images = False
     try:
-        opt_val, params = getopt(sys.argv[1:], "xcf:m:r", ["file="])
+        opt_val, params = getopt(sys.argv[1:], "xcf:m:rv", ["file="])
         for option, value in opt_val:
             if option == "-f" or option == "--in-file":
                 assets_file_path = value
@@ -493,6 +512,8 @@ if __name__ == "__main__":
                 metadata_json = value
             elif option == "-r":
                 raw_images = True
+            elif option == "-v":
+                verbose = True
     except GetoptError:
         print(usage_string)
         exit(1)
@@ -567,4 +588,22 @@ if __name__ == "__main__":
                            fmt=fmt, raw_images=raw_images)
 
     if do_compress:
+        if metadata_json is None:
+            metadata_json = os.path.join(assets_dir_path, 'format.json')
+        try:
+            with open(metadata_json, 'r') as meta_file:
+                format_string = meta_file.read()
+                fmt = json.loads(format_string)
+                OFFSETS_START = int(fmt['OFFSETS_START'])
+                IMG_COUNT = int(fmt['IMG_COUNT'])
+                SOUND_COUNT = int(fmt['SOUND_COUNT'])
+                FONT_COUNT = int(fmt['FONT_COUNT'])
+                SHADER_COUNT = int(fmt['SHADER_COUNT'])
+                FILE_COUNT = int(fmt['FILE_COUNT'])
+                TYPE_SIZE_COUNT = int(fmt['TYPE_SIZE_COUNT'])
+                image_format = fmt['image_format']
+        except FileNotFoundError:
+            print("ERROR: unable to open %s ; please proved path to a valid metadata json file with the -m option" % metadata_json, file = sys.stderr)
+            exit(1)
+
         write_assets_file(assets_file_path, assets_dir_path)
