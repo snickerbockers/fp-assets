@@ -238,7 +238,10 @@ def write_img(assets_file, img_path, meta_path):
     if image_format == 'zlib':
         data = zlib.compress(img.tobytes(), 9)
     else:
-        data = compress_img(img.tobytes())
+        print("**** BEGIN COMPRESSION OF %s" % img_path)
+        bts = img.tobytes()
+        print("    uncompressed length of %d" % len(bts))
+        data = compress_img(bts)
     img_meta_file = open(meta_path, "r")
     img_meta_txt = img_meta_file.read().splitlines()
     img_meta_data = struct.pack("<HHHH", \

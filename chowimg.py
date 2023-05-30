@@ -36,12 +36,12 @@ def load_hunk(infile, verbose=False):
     hunk = []
 
     hunk_len = struct.unpack("<I", infile.read(4))[0]
-    print("hunk length is %d" % hunk_len)
 
     bytes_read = 0
     len_expect = 0
 
     while bytes_read < hunk_len:
+        print("%d bytes read, hunk length is %d" % (bytes_read, hunk_len))
         ctrl_byte = struct.unpack("B", infile.read(1))[0]
         bytes_read += 1
 
@@ -113,7 +113,7 @@ def load_img(infile, compressed_len, verbose=False):
 
 class subhunk:
     def __init__(self):
-        self.lit = [ ]
+        self.literal = [ ]
         self.rewind = 0
         self.replay_len = 0
 
@@ -128,8 +128,8 @@ class compressor:
         self.uncompressed_len = 0
         self.verbose = verbose
 
-        # list of subhunk structures
-        self.sub = [ ]
+        self.hunks = []
+        self.sub = []
 
     @staticmethod
     def encode_vll(val):
@@ -138,23 +138,44 @@ class compressor:
         to get *val*.  The first value will be no greater than 15,
         and the last value will be less than 255
         """
+        bts = bytearray()
         if val < 0:
             print("ERROR: attempt to encode negative value %d as VLL" % val, file=sys.stderr)
             exit(1)
         if val < 15:
-            return [ val ]
-        seq = [ 15 ]
+            bts.append(val)
+            return bts
+        bts.append(15)
         val -= 15
         while val >= 255:
-            seq.append(255)
+            bts.append(255)
             val -= 255
-        seq.append(val)
-        return seq
+        bts.append(val)
+        return bts
 
     def push_byte(self, cur_byte):
+        self.uncompressed_len += 1
         if len(self.window) >= 65536:
-            print("ERROR: need to implement multiple hunks")
-            exit(1)
+            if len(self.cur_match) < 4:
+                self.sub[-1].literal += self.literal + self.cur_match
+            else:
+                self.sub.append(subhunk())
+                self.sub[-1].literal = self.literal
+                self.sub[-1].rewind = self.window_end - self.cur_match_start
+                self.sub[-1].replay_len = len(self.cur_match)
+                if self.sub[-1].replay_len < 4:
+                    print("WHAT THE FUCK replay_len IS %d" % 4,file = sys.stderr)
+
+            print("SPLIT OFF NEW HUNK, OLD HUNK LENGTH IS %d" % len(self.window))
+            self.hunks.append((len(self.window), self.sub))
+            self.window = bytearray()
+            self.state = "LITERAL"
+            self.cur_match = bytearray()
+            self.cur_match_start = -1
+            self.window_end = 0
+            self.literal = bytearray()
+            self.uncompressed_len = 0
+            self.sub = []
 
         while True:
             if self.state == "REWIND":
@@ -186,6 +207,8 @@ class compressor:
                     self.sub[-1].literal = self.literal
                     self.sub[-1].rewind = self.window_end - self.cur_match_start
                     self.sub[-1].replay_len = len(self.cur_match)
+                    if self.sub[-1].replay_len < 4:
+                        print("WHAT THE FUCK replay_len IS %d" % 4,file = sys.stderr)
 
                     if self.verbose:
                         if len(self.cur_match):
@@ -194,9 +217,6 @@ class compressor:
                         else:
                             print("%d literal bytes, %d repeat bytes starting XXX from the end" % (len(self.literal), len(self.cur_match)))
 
-                    self.uncompressed_len += len(self.literal) + len(self.cur_match)
-                    if self.uncompressed_len != len(self.window):
-                        print("WARNING: self.uncompressed_len is %d but len(self.window) is %d" % (self.uncompressed_len, len(self.window)), file=sys.stderr)
                     # reset state machine
                     self.state = "LITERAL"
                     self.literal = bytearray()
@@ -213,52 +233,74 @@ class compressor:
     def get_raw_data(self):
         if len(self.literal) or len(self.cur_match):
             # need to add residual unsaved data to end of hunk
-            if len(self.sub) == 0:
-                self.sub.append(subhunk())
             if len(self.cur_match) < 4:
-                self.sub[-1].literal += self.literal + self.cur_match
+                if len(self.sub):
+                    self.sub[-1].literal += self.literal + self.cur_match
+                else:
+                    """
+                    ########################################################
+                    ##################### SPECIAL CASE #####################
+                    ########################################################
+                    We're at this point because this image actually cannot be
+                    encoded with moving-window compression because there's no
+                    repitition.  This generally happens with extremely small
+                    images; in Freedom Planet the smallest image is actually
+                    just a single pixel.
+
+                    ordinarily this compression format does not allow for subhunks
+                    to replay less than four bytes from the moving window.
+                    However, there is one exception which is that if the entire hunk is
+                    contained in one subhunk's literal data, then the replay is ignored
+                    and it does not matter what it's length is.
+                    """
+                    self.sub.append(subhunk())
+                    self.sub[-1].literal = self.literal + self.cur_match
             else:
                 self.sub.append(subhunk())
                 self.sub[-1].literal = self.literal
                 self.sub[-1].rewind = self.window_end - self.cur_match_start
                 self.sub[-1].replay_len = len(self.cur_match)
-                print("final subhunk added: %d literal bytes, %d rewind, %d replay bytes" % (len(self.sub[-1].literal), self.sub[-1].rewind, self.sub[-1].replay_len))
+                if self.sub[-1].replay_len < 4:
+                    print("WHAT THE FUCK replay_len IS %d" % 4,file = sys.stderr)
             self.literal = bytearray()
             self.cur_match = bytearray()
 
-        # compile the subhunks into raw binary data
+        if len(self.sub):
+            # need to complete residual hunk
+            self.hunks.append((len(self.window), self.sub))
+            self.window = bytearray()
+            self.sub = []
+
         data = bytes()
-        for sh in self.sub:
-            if sh.replay_len < 4:
-                print("ERROR: replay_len is %d" % sh.replay_len)
-                exit(1)
+        # compile the hunks into raw binary data
+        for hk in self.hunks:
+            hunkdat = bytes()
+            for sh in hk[1]:
+                no_replay = False
+                if sh.replay_len < 4:
+                    # TODO: maybe check to make sure this only happens when the entire hunk is
+                    #       a single subhunk's literal section
+                    # print("ERROR: replay_len is %d" % sh.replay_len, file=sys.stderr)
+                    # print("original uncompressed length was %d bytes" % self.uncompressed_len, file=sys.stderr)
+                    # exit(1)
+                    sh.replay_len = 4# replay length will be ignored if the literal section contains the entire hunk
+                    no_replay = True
 
-            litlen = compressor.encode_vll(len(sh.literal))
-            replen = compressor.encode_vll(sh.replay_len - 4)
-            control_byte = (litlen[0] << 4) | replen[0]
+                litlen = compressor.encode_vll(len(sh.literal))
+                replen = compressor.encode_vll(sh.replay_len - 4)
+                control_byte = (litlen[0] << 4) | replen[0]
 
-            data += struct.pack("B", control_byte)
-            for bt in litlen[1:]:
-                data += struct.pack("B", bt)
+                hunkdat += struct.pack("B", control_byte) + litlen[1:] + sh.literal
 
-            for bt in sh.literal:
-                data += struct.pack("B", bt)
+                if not no_replay:
+                    hunkdat += struct.pack("<H", sh.rewind) + replen[1:]
+            hunklen = len(hunkdat)
+            data += struct.pack("<I", hunklen) + hunkdat
 
-            data += struct.pack("<H", sh.rewind)
-            for bt in replen[1:]:
-                data += struct.pack("B", bt)
-
-        compressed_len = len(data) + 4
+        compressed_len = len(data)
         print("original uncompressed length was %d bytes" % self.uncompressed_len)
         print("compressed length is %d bytes" % compressed_len)
         print("compression ratio is %f%%" % (100 * compressed_len / self.uncompressed_len))
-        print("there are %d bytes in the window" % len(self.window))
-        # if self.uncompressed_len != len(self.window):
-        #     print("WARNING: uncompressed length should be %d but instead it's %d!" % (len(self.window), self.uncompressed_len), file = sys.stderr)
-        datlen = len(data)
-        print("hunk length is %d" % datlen)
-
-        data = struct.pack("<I", datlen) + data
         return data
 
     def save(self, stream):
@@ -266,6 +308,7 @@ class compressor:
         stream.write(self.get_raw_data())
 
 def compress_img(rawdat, verbose=False):
+    print("****** BEGIN NEW IMAGE COMPRESSION ******")
     comp = compressor(verbose=verbose)
     for bt in rawdat:
         comp.push_byte(bt)
