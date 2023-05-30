@@ -213,6 +213,8 @@ class compressor:
     def get_raw_data(self):
         if len(self.literal) or len(self.cur_match):
             # need to add residual unsaved data to end of hunk
+            if len(self.sub) == 0:
+                self.sub.append(subhunk())
             if len(self.cur_match) < 4:
                 self.sub[-1].literal += self.literal + self.cur_match
             else:
