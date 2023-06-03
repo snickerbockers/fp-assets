@@ -315,7 +315,18 @@ def compress_img(rawdat, verbose=False):
     return comp.get_raw_data()
 
 if __name__=='__main__':
-    usage_string="Usage: %s [-v] -x|-c <in-file> <out-file>" % sys.argv[0]
+    usage_string="""\
+    Usage: %s [-v] [-w width -h height -x]|[-c] <in-file> <out-file>
+
+    -x    eXtraction: convert a chowimg-encoded .bin file to a .png file
+    -c    Compression: convert a .png file to a chowimg-encoded .bin file
+    -v    Verbose-mode
+    -h    set height of image (mandatory when using -x)
+    -w    set width of image (mandatory when using -x)
+    -w    set width
+
+    obviously -x and -c are mutually-exclusive\
+    """ % sys.argv[0]
 
     # mode 0 - indeterminate
     # mode 1 - eXtract
