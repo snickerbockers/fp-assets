@@ -318,37 +318,46 @@ if __name__=='__main__':
     usage_string="""\
     Usage: %s [-v] [-w width -h height -x]|[-c] <in-file> <out-file>
 
-    -x    eXtraction: convert a chowimg-encoded .bin file to a .png file
+    -x    eXtraction:  convert a chowimg-encoded .bin file to a .png file
     -c    Compression: convert a .png file to a chowimg-encoded .bin file
+    -r    Raw:         convert a .png or chowimg-encoded .bin to raw pixels
     -v    Verbose-mode
     -h    set height of image (mandatory when using -x)
     -w    set width of image (mandatory when using -x)
     -w    set width
 
-    obviously -x and -c are mutually-exclusive\
+    obviously -x, -c, and -r are mutually-exclusive.
     """ % sys.argv[0]
 
     # mode 0 - indeterminate
     # mode 1 - eXtract
     # mode 2 - Compress
+    # mode 3 - Raw
     mode = 0
     width = -1
     height = -1
     verbose = False
 
+    # TODO: we don't actually need -r, -c and -x
+    # we can just decide what to do based on file extensions
     try:
-        opt_val, params = getopt(sys.argv[1:], "xcw:h:v")
+        opt_val, params = getopt(sys.argv[1:], "xcrw:h:v")
         for option, value in opt_val:
             if option == "-x":
-                if mode == 2:
+                if mode != 0:
                     print(usage_string)
                     exit(1)
                 mode = 1
             elif option == "-c":
-                if mode == 1:
+                if mode != 0:
                     print(usage_string)
                     exit(1)
                 mode = 2
+            elif option == "-r":
+                if mode != 0:
+                    print(usage_string)
+                    exit(1)
+                mode = 3
             elif option == "-w":
                 width = int(value)
             elif option == "-h":
@@ -360,7 +369,7 @@ if __name__=='__main__':
         print(usage_string)
         exit(1)
 
-    if len(params) != 2 or (mode != 1 and mode != 2):
+    if len(params) != 2 or (mode != 1 and mode != 2 and mode != 3):
         print(usage_string)
         exit(1)
 
@@ -388,6 +397,46 @@ if __name__=='__main__':
     elif mode == 2:
         with open(params[1], "wb") as outf:
             outf.write(compress_img(Image.open(params[0]).tobytes(), verbose=verbose))
+    elif mode == 3:
+        src_file = params[0]
+        dst_file = params[1]
+        print("request to convert from %s to %s" % (src_file, dst_file))
+        src_ext = src_file.rpartition('.')[2].casefold()
+        dst_ext = dst_file.rpartition('.')[2].casefold()
+        print("source extension is %s" % src_ext)
+        if src_ext == 'png':
+            with open(dst_file, 'wb') as outf:
+                outf.write(Image.open(src_file).tobytes())
+            exit(0)
+        elif src_ext == 'bin':
+            with open(src_file, "rb") as infile:
+                infile.seek(0, 2)
+                compressed_len = infile.tell()
+                infile.seek(0)
+                img_dat = load_img(infile, compressed_len, verbose)
+                with open(dst_file, "wb") as outfile:
+                    outfile.write(bytes(img_dat))
+                exit(0)
+        elif src_ext == 'raw':
+            with open(src_file, "rb") as infile:
+                img_dat = infile.read()
+                if dst_ext == 'png':
+                    if width <= 0 or height <= 0:
+                        print("ERROR: need to supply width (-w option) and height (-h option)", file=sys.stderr)
+                        exit(1)
+                    img_obj = Image.frombytes("RGBA", (width, height), bytes(img_dat))
+                    img_obj.save(params[1])
+                    exit(0)
+                elif dst_ext == 'bin':
+                    with open(dst_file, "wb") as outfile:
+                        outfile.write(compress_img(img_dat, verbose=verbose))
+                        exit(0)
+                else:
+                    print("ERROR: CANNOT CONVERT RAW FILES TO %s" % dst_ext, file=sys.stderr)
+                    exit(1)
+        else:
+            print("ERROR: CANNOT CONVERT %s FILES TO RAW" % src_ext, file=sys.stderr)
+            exit(1)
     else:
         # should be impossible to get here anyways
         print(usage_string)
