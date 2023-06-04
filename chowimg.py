@@ -316,24 +316,32 @@ def compress_img(rawdat, verbose=False):
 
 if __name__=='__main__':
     usage_string="""\
-    Usage: %s [-v] [-w width -h height -x]|[-c] <in-file> <out-file>
+    Usage: %s [-v] [-w width -h height] <in-file> <out-file>
 
-    -x    eXtraction:  convert a chowimg-encoded .bin file to a .png file
-    -c    Compression: convert a .png file to a chowimg-encoded .bin file
-    -r    Raw:         convert a .png or chowimg-encoded .bin to raw pixels
     -v    Verbose-mode
     -h    set height of image (mandatory when using -x)
     -w    set width of image (mandatory when using -x)
     -w    set width
 
-    obviously -x, -c, and -r are mutually-exclusive.
+    chowimg.py converts images between two different image formats.
+    It should not be run as an independent program unless you're doing testing.
+    It primarily exists as a support module for fp-assets.py, which is probably
+    what you actually want to run.
+
+    the conversion done is based on the file extensions of in-file and
+    out-file.  If they do not match the below extensions then this will not
+    work.
+
+    .png - Portable Network Graphics file
+    .bin - chowdren-format compressed image
+    .raw - uncompressed RGBA quads, 32-bits per pixel
+
+    when the destination-type is .png, the width and height of the image must
+    be supplied with the -w and -h options.  As an exception, the width and height
+    will be determined automatically if the source-file is .png, but then you're converting
+    from a .png img to a .png image and that's just stupid.
     """ % sys.argv[0]
 
-    # mode 0 - indeterminate
-    # mode 1 - eXtract
-    # mode 2 - Compress
-    # mode 3 - Raw
-    mode = 0
     width = -1
     height = -1
     verbose = False
@@ -341,24 +349,9 @@ if __name__=='__main__':
     # TODO: we don't actually need -r, -c and -x
     # we can just decide what to do based on file extensions
     try:
-        opt_val, params = getopt(sys.argv[1:], "xcrw:h:v")
+        opt_val, params = getopt(sys.argv[1:], "w:h:v")
         for option, value in opt_val:
-            if option == "-x":
-                if mode != 0:
-                    print(usage_string)
-                    exit(1)
-                mode = 1
-            elif option == "-c":
-                if mode != 0:
-                    print(usage_string)
-                    exit(1)
-                mode = 2
-            elif option == "-r":
-                if mode != 0:
-                    print(usage_string)
-                    exit(1)
-                mode = 3
-            elif option == "-w":
+            if option == "-w":
                 width = int(value)
             elif option == "-h":
                 height = int(value)
@@ -369,75 +362,45 @@ if __name__=='__main__':
         print(usage_string)
         exit(1)
 
-    if len(params) != 2 or (mode != 1 and mode != 2 and mode != 3):
-        print(usage_string)
-        exit(1)
+    src_file = params[0]
+    dst_file = params[1]
+    print("request to convert from %s to %s" % (src_file, dst_file))
+    src_ext = src_file.rpartition('.')[2].casefold()
+    dst_ext = dst_file.rpartition('.')[2].casefold()
+    print("source extension is %s" % src_ext)
 
-    if mode == 1:
-        print("extraction selected")
-        if width < 0 or height < 0:
-            print("WIDTH AND HEIGHT NOT INPUT; RUN WITH -w AND -h options")
-            exit(1)
-        print("requested dimensions are %ux%u" % (width, height))
-
-        with open(params[0], "rb") as infile:
+    if src_ext == 'png':
+        img_obj = Image.open(src_file)
+        if width < 0:
+            width = img_obj.width
+        if height < 0:
+            height = img_obj.height
+        img_dat = img_obj.tobytes()
+    elif src_ext == 'bin':
+        with open(src_file, "rb") as infile:
             infile.seek(0, 2)
             compressed_len = infile.tell()
             infile.seek(0)
             img_dat = load_img(infile, compressed_len, verbose)
-
-        expected_len = width * height * 4
-        print("total uncompressed image length is %u bytes" % len(img_dat))
-        if expected_len != len(img_dat):
-            print("WARNING: image data length %d does not match expected length of %d" % \
-                  (len(img_dat), expected_len), file=sys.stderr)
-
-        img_obj = Image.frombytes("RGBA", (width, height), bytes(img_dat))
-        img_obj.save(params[1])
-    elif mode == 2:
-        with open(params[1], "wb") as outf:
-            outf.write(compress_img(Image.open(params[0]).tobytes(), verbose=verbose))
-    elif mode == 3:
-        src_file = params[0]
-        dst_file = params[1]
-        print("request to convert from %s to %s" % (src_file, dst_file))
-        src_ext = src_file.rpartition('.')[2].casefold()
-        dst_ext = dst_file.rpartition('.')[2].casefold()
-        print("source extension is %s" % src_ext)
-        if src_ext == 'png':
-            with open(dst_file, 'wb') as outf:
-                outf.write(Image.open(src_file).tobytes())
-            exit(0)
-        elif src_ext == 'bin':
-            with open(src_file, "rb") as infile:
-                infile.seek(0, 2)
-                compressed_len = infile.tell()
-                infile.seek(0)
-                img_dat = load_img(infile, compressed_len, verbose)
-                with open(dst_file, "wb") as outfile:
-                    outfile.write(bytes(img_dat))
-                exit(0)
-        elif src_ext == 'raw':
-            with open(src_file, "rb") as infile:
-                img_dat = infile.read()
-                if dst_ext == 'png':
-                    if width <= 0 or height <= 0:
-                        print("ERROR: need to supply width (-w option) and height (-h option)", file=sys.stderr)
-                        exit(1)
-                    img_obj = Image.frombytes("RGBA", (width, height), bytes(img_dat))
-                    img_obj.save(params[1])
-                    exit(0)
-                elif dst_ext == 'bin':
-                    with open(dst_file, "wb") as outfile:
-                        outfile.write(compress_img(img_dat, verbose=verbose))
-                        exit(0)
-                else:
-                    print("ERROR: CANNOT CONVERT RAW FILES TO %s" % dst_ext, file=sys.stderr)
-                    exit(1)
-        else:
-            print("ERROR: CANNOT CONVERT %s FILES TO RAW" % src_ext, file=sys.stderr)
-            exit(1)
+    elif src_ext == 'raw':
+        with open(src_file, "rb") as infile:
+            img_dat = infile.read()
     else:
-        # should be impossible to get here anyways
-        print(usage_string)
+        print("ERROR: unrecognized source file extension \"%s\"" % src_ext, file=sys.stderr)
+        exit(1)
+
+    if dst_ext == 'png':
+        if width < 0 or height < 0:
+            print("ERROR: destination file type \"png\" required width (-w option) and height (-h option)", file=sys.stderr)
+            exit(1)
+        img_obj = Image.frombytes("RGBA", (width, height), bytes(img_dat))
+        img_obj.save(dst_file)
+    elif dst_ext == 'bin':
+        with open(dst_file, "wb") as outfile:
+            outfile.write(compress_img(img_dat, verbose=verbose))
+    elif dst_ext == 'raw':
+        with open(dst_file, "wb") as outfile:
+            outfile.write(bytes(img_dat))
+    else:
+        print("ERROR: unrecognized destination file extension \"%s\"" % src_ext, file=sys.stderr)
         exit(1)
