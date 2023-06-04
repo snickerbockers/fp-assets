@@ -232,29 +232,12 @@ class compressor:
 
     def get_raw_data(self):
         if len(self.literal) or len(self.cur_match):
+            if self.verbose:
+                print("adding residual data to the end of the final hunk")
             # need to add residual unsaved data to end of hunk
             if len(self.cur_match) < 4:
-                if len(self.sub):
-                    self.sub[-1].literal += self.literal + self.cur_match
-                else:
-                    """
-                    ########################################################
-                    ##################### SPECIAL CASE #####################
-                    ########################################################
-                    We're at this point because this image actually cannot be
-                    encoded with moving-window compression because there's no
-                    repitition.  This generally happens with extremely small
-                    images; in Freedom Planet the smallest image is actually
-                    just a single pixel.
-
-                    ordinarily this compression format does not allow for subhunks
-                    to replay less than four bytes from the moving window.
-                    However, there is one exception which is that if the entire hunk is
-                    contained in one subhunk's literal data, then the replay is ignored
-                    and it does not matter what it's length is.
-                    """
-                    self.sub.append(subhunk())
-                    self.sub[-1].literal = self.literal + self.cur_match
+                self.sub.append(subhunk())
+                self.sub[-1].literal = self.cur_match
             else:
                 self.sub.append(subhunk())
                 self.sub[-1].literal = self.literal
