@@ -157,7 +157,8 @@ class compressor:
         self.uncompressed_len += 1
         if len(self.window) >= 65536:
             if len(self.cur_match) < 4:
-                self.sub[-1].literal += self.literal + self.cur_match
+                self.sub.append(subhunk())
+                self.sub[-1].literal = bytearray(self.cur_match)
             else:
                 self.sub.append(subhunk())
                 self.sub[-1].literal = self.literal
