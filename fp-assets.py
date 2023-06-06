@@ -438,6 +438,7 @@ def extract_all_assets(assets_file_path, assets_dir_path, fmt, raw_images):
     else:
         img_ext = "png"
     for index, offset in enumerate(img_offsets):
+        print("preparing to extract image %d..." % index)
         assets_file.seek(offset)
         extract_img(assets_file, "img_%d.%s" % (index, img_ext), \
                     "img_%d_meta.txt" % index, raw_images)
