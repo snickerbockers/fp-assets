@@ -234,10 +234,11 @@ class compressor:
         if len(self.literal) or len(self.cur_match):
             if self.verbose:
                 print("adding residual data to the end of the final hunk")
+                print("residual data contains %d literal and %d repeat" % (len(self.literal), len(self.cur_match)))
             # need to add residual unsaved data to end of hunk
             if len(self.cur_match) and len(self.cur_match) < 4:
                 self.sub.append(subhunk())
-                self.sub[-1].literal = self.cur_match
+                self.sub[-1].literal = self.literal + self.cur_match
             else:
                 self.sub.append(subhunk())
                 self.sub[-1].literal = self.literal
@@ -376,6 +377,8 @@ if __name__=='__main__':
         if width < 0 or height < 0:
             print("ERROR: destination file type \"png\" required width (-w option) and height (-h option)", file=sys.stderr)
             exit(1)
+        if len(img_dat) != width * height * 4:
+            print("WARNING: expected decompressed image size is %d but in reality it's %d" % (width * height * 4, len(img_dat)), file=sys.stderr)
         img_obj = Image.frombytes("RGBA", (width, height), bytes(img_dat))
         img_obj.save(dst_file)
     elif dst_ext == 'bin':
