@@ -236,7 +236,7 @@ class compressor:
             if self.verbose:
                 print("adding residual data to the end of the final hunk")
             # need to add residual unsaved data to end of hunk
-            if len(self.cur_match) < 4:
+            if len(self.cur_match) and len(self.cur_match) < 4:
                 self.sub.append(subhunk())
                 self.sub[-1].literal = self.cur_match
             else:
