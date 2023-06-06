@@ -41,7 +41,6 @@ def load_hunk(infile, verbose=False):
     len_expect = 0
 
     while bytes_read < hunk_len:
-        print("%d bytes read, hunk length is %d" % (bytes_read, hunk_len))
         ctrl_byte = struct.unpack("B", infile.read(1))[0]
         bytes_read += 1
 
