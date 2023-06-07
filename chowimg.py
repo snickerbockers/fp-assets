@@ -182,7 +182,10 @@ class compressor:
                 next_match = copy(self.cur_match)
                 next_match.append(cur_byte)
 
-                subseq_start = self.window.rfind(next_match)
+                if self.cur_match_start >= 0 and self.cur_match_start + len(next_match) <= len(self.window) and self.window[self.cur_match_start + len(next_match) - 1] == cur_byte:
+                    subseq_start = self.cur_match_start
+                else:
+                    subseq_start = self.window.rfind(next_match)
                 if subseq_start >= 0:
                     # add cur_byte to self.cur_match and self.window
                     self.cur_match = next_match
