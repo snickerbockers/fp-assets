@@ -36,6 +36,7 @@ TEST_DIR="consistency_test"
 
 src_dat=sys.argv[1]
 
+os.system("[ -d %s ] && rm -r %s" % (TEST_DIR, TEST_DIR))
 os.mkdir(TEST_DIR)
 
 first_extract_path=os.path.join(TEST_DIR, "first_extract")
