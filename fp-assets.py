@@ -540,8 +540,8 @@ if __name__ == "__main__":
         csum = md5sum(assets_file_path)
         print("assets file has a checksum of %s" % csum)
         if metadata_json is None:
-            # latest version (as of may 2023).  fb95f5c is linux, 4085c98 is windows
-            if csum == "fb95f5c4809e76cae933be20ca51a660" or csum == "4085c983fb918703ce459f17f69c474c":
+            # latest version (as of may 2023).  fb95f5c is linux, 4085c98 is windows, 97fa3c33c is shitendo switch.
+            if csum == "fb95f5c4809e76cae933be20ca51a660" or csum == "4085c983fb918703ce459f17f69c474c" or csum == "97fa3c33c6fc72bece978c06cacf3ebf":
                 format_string = """
                 {
                 "OFFSETS_START" : 34324,
